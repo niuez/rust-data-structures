@@ -1,2 +1,1 @@
-pub mod splay_tree_array;
-pub mod splay_tree_array_safe;
+pub mod avl_tree_array;
