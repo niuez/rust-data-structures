@@ -175,22 +175,25 @@ impl<N: AVLArrayNode + FoldNode> AVLTreeArray<N> where N::Value: Monoid {
     }
 }
 
+impl NodeSize for (Size, Height) {
+    fn size(&self) -> usize { self.0.size() }
+}
+
+impl NodeHeight for (Size, Height) {
+    fn height(&self) -> isize { self.1.height() }
+}
+
 #[test]
 fn avlarray_test() {
     use bbstree::nodes::ArrNode;
+    use bbstree::node_traits::*;
     let arr = AVLTreeArray::none();
-    let arr = arr.merge(AVLTreeArray::new(ArrNode::new(0)));
-    let arr = arr.merge(AVLTreeArray::new(ArrNode::new(1)));
-    let arr = arr.merge(AVLTreeArray::new(ArrNode::new(2)));
-    let arr = arr.merge(AVLTreeArray::new(ArrNode::new(3)));
-    let arr = arr.merge(AVLTreeArray::new(ArrNode::new(4)));
-    let arr = arr.merge(AVLTreeArray::new(ArrNode::new(5)));
+    let arr = arr.merge(AVLTreeArray::new(ArrNode::<(Size, Height), Element<usize>>::new(Element::new(0usize))));
+    let arr = arr.merge(AVLTreeArray::new(ArrNode::new(Element::new(1usize))));
+    let arr = arr.merge(AVLTreeArray::new(ArrNode::new(Element::new(2usize))));
     assert!(*arr.at(0) == 0);
     assert!(*arr.at(1) == 1);
     assert!(*arr.at(2) == 2);
-    assert!(*arr.at(3) == 3);
-    assert!(*arr.at(4) == 4);
-    assert!(*arr.at(5) == 5);
 }
 
 #[cfg(test)]
@@ -212,11 +215,12 @@ mod avlrsq_test {
     #[test]
     fn avlrsq_test()  {
         use bbstree::avl_tree_array::AVLTreeArray;
-        use bbstree::nodes::ArrFoldNode;
+        use bbstree::nodes::ArrNode;
+        use bbstree::node_traits::*;
         let arr = AVLTreeArray::none();
-        let arr = arr.merge(AVLTreeArray::new(ArrFoldNode::new(Am(1))));
-        let arr = arr.merge(AVLTreeArray::new(ArrFoldNode::new(Am(2))));
-        let mut arr = arr.merge(AVLTreeArray::new(ArrFoldNode::new(Am(3))));
+        let arr = arr.merge(AVLTreeArray::new(ArrNode::<(Size, Height), FoldElement<Am>>::new(FoldElement::new(Am(1)))));
+        let arr = arr.merge(AVLTreeArray::new(ArrNode::new(FoldElement::new(Am(2)))));
+        let mut arr = arr.merge(AVLTreeArray::new(ArrNode::new(FoldElement::new(Am(3)))));
         {
             let (center, right) = arr.split(2);
             let (left, center) = center.split(0);

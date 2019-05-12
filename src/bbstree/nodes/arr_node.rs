@@ -1,29 +1,27 @@
 use bbstree::node_traits::*;
-use std::cmp::max;
+use algebra::*;
 
-pub struct ArrNode<T> {
-    val: T,
-    size: usize,
-    height: isize,
-    child: [Link<ArrNode<T>>; 2]
+pub struct ArrNode<D: Data, V: Value> {
+    data: D,
+    val: V,
+    child: [Link<ArrNode<D, V>>; 2],
 } 
 
-impl<T> ArrNode<T> {
-    pub fn new(val: T) -> Self {
+impl<D: Data, V: Value> ArrNode<D, V> {
+    pub fn new(val: V) -> Self {
         Self {
+            data: D::new(),
             val: val,
-            size: 1,
-            height: 1,
             child: [ None, None ],
         }
     }
 }
 
-impl<T> Node for ArrNode<T> {
-    type Value = T;
+impl<D: Data, V: Value> Node for ArrNode<D, V> {
+    type Value = V::Type;
     fn fix(&mut self) {
-        self.size = size(&self.child[0]) + size(&self.child[1]) + 1;
-        self.height = max(height(&self.child[0]), height(&self.child[1])) + 1;
+        self.data.fix(self.child[0].as_ref().map(|c| &c.data), self.child[1].as_ref().map(|c| &c.data));
+        self.val.fix(self.child[0].as_ref().map(|c| &c.val), self.child[1].as_ref().map(|c| &c.val));
     }
     fn child(&mut self, dir: usize) -> &mut Link<Self> { &mut self.child[dir] } 
     fn child_imut(&self, dir: usize) -> &Link<Self> { &self.child[dir] } 
@@ -36,14 +34,18 @@ impl<T> Node for ArrNode<T> {
         self.child[dir] = dir_node;
         self.fix();
     }
-    fn val(&self) -> &Self::Value { &self.val }
-    fn val_mut(&mut self) -> &mut Self::Value { &mut self.val }
+    fn val(&self) -> &Self::Value { self.val.val() }
+    fn val_mut(&mut self) -> &mut Self::Value { self.val.val_mut() }
 }
 
-impl<T> ArrayNode for ArrNode<T> {
-    fn size(&self) -> usize { self.size }
+impl<D: NodeSize, V: Value> ArrayNode for ArrNode<D, V> {
+    fn size(&self) -> usize { self.data.size() }
 }
 
-impl<T> AVLNode for ArrNode<T> {
-    fn height(&self) -> isize { self.height }
+impl<D: NodeHeight, V: Value> AVLNode for ArrNode<D, V> {
+    fn height(&self) -> isize { self.data.height() }
+}
+
+impl<D: Data, V: Foldable> FoldNode for ArrNode<D, V> where V::Type: Monoid {
+    fn fold(&self) -> &V::Type { self.val.fold() }
 }
