@@ -1,79 +1,27 @@
-use std::cmp::max;
-use std::mem;
+use bbstree::node_traits::*;
+use algebra::{ Monoid, Unital };
 
-type Link<T> = Option<Box<Node<T>>>;
+pub trait AVLArrayNode: Node + ArrayNode + AVLNode {}
 
-struct Node<T> {
-    elem: T,
-    size: usize,
-    height: isize,
-    child: [Link<T>; 2],
-}
+impl<N: Node + ArrayNode + AVLNode> AVLArrayNode for N {}
 
-impl<T> Node<T> {
-    fn new(elem: T) -> Node<T> {
-        Node { elem: elem, size: 1, height: 1, child: [None, None] }
-    }
-}
-
-fn size<T>(link: &Link<T>) -> usize {
-    match link {
-        &Some(ref node) => node.size,
-        &None => 0,
-    }
-}
-
-fn height<T>(link: &Link<T>) -> isize {
-    match link {
-        &Some(ref node) => node.height,
-        &None => 0,
-    }
-}
-fn diff_node<T>(node: &Box<Node<T>>) -> isize {
-    height(&node.child[0]) - height(&node.child[1])
-}
-
-fn diff_link<T>(link: &Link<T>) -> isize {
-    match link {
-        &Some(ref node) => diff_node(node),
-        &None => 0
-    }
-}
-
-fn fix<T>(node: &mut Node<T>) {
-    node.size = size(&node.child[0]) + size(&node.child[1]) + 1;
-    node.height = max(height(&node.child[0]), height(&node.child[1])) + 1;
-}
-
-fn cut<T>(mut node: Box<Node<T>>, dir: usize) -> (Box<Node<T>>, Link<T>) {
-    let nn = node.child[dir].take();
-    fix(node.as_mut());
-    (node, nn)
-}
-
-fn set<T>(mut node: Box<Node<T>>, dir_node: Link<T>, dir: usize) -> Box<Node<T>> {
-    node.child[dir] = dir_node;
-    fix(node.as_mut());
-    node
-}
-
-fn rotate<T>(x: Box<Node<T>>, dir: usize) -> Box<Node<T>> {
+fn rotate<N: AVLArrayNode>(x: Box<N>, dir: usize) -> Box<N> {
     let (x, y) = cut(x, 1 - dir);
-    let (y, B) = cut(y.unwrap(), dir);
-    let x = set(x, B, 1 - dir);
+    let (y, b) = cut(y.unwrap(), dir);
+    let x = set(x, b, 1 - dir);
     set(y, Some(x), dir)
 }
 
-fn balance<T>(mut node: Box<Node<T>>) -> Box<Node<T>> {
-    if diff_node(&node) == 2 {
-        if diff_link(&node.child[0]) == -1 {
+fn balance<N: AVLArrayNode>(mut node: Box<N>) -> Box<N> {
+    if node.diff() == 2 {
+        if diff(node.child(0)) == -1 {
             let (n, ch) = cut(node, 0);
             node = set(n, Some(rotate(ch.unwrap(), 0)), 0);
         }
         rotate(node, 1)
     }
-    else if diff_node(&node) == -2 {
-        if diff_link(&node.child[1]) == 1 {
+    else if node.diff() == -2 {
+        if diff(node.child(1)) == 1 {
             let (n, ch) = cut(node, 1);
             node = set(n, Some(rotate(ch.unwrap(), 1)), 1);
         }
@@ -82,13 +30,13 @@ fn balance<T>(mut node: Box<Node<T>>) -> Box<Node<T>> {
     else { node }
 }
 
-fn deepest_node<T>(mut node: Box<Node<T>>, dir: usize) -> (Box<Node<T>>, Link<T>) {
+fn deepest_node<N: AVLArrayNode>(node: Box<N>, dir: usize) -> (Box<N>, Link<N>) {
     let (mut n, ch) = cut(node, dir);
     match ch {
         Some(dir_node) => {
             let (deepest_node, dirn) = deepest_node(dir_node, dir);
             n = set(n, dirn, dir);
-            (deepest_node, Some(n))
+            (deepest_node, Some(balance(n)))
         }
         None => {
             cut(n, 1 - dir)
@@ -96,11 +44,10 @@ fn deepest_node<T>(mut node: Box<Node<T>>, dir: usize) -> (Box<Node<T>>, Link<T>
     }
 }
 
-fn merge_dir<T>(dst: Box<Node<T>>, mut root: Box<Node<T>>, src: Link<T>, dir: usize) -> Box<Node<T>> {
-    if (dst.height - height(&src)).abs() <= 1 {
+fn merge_dir<N: AVLArrayNode>(dst: Box<N>, mut root: Box<N>, src: Link<N>, dir: usize) -> Box<N> {
+    if (dst.height() - height(&src)).abs() <= 1 {
         root = set(root, src, dir);
         root = set(root, Some(dst), 1 - dir);
-        fix(&mut root);
         root
     }
     else {
@@ -117,12 +64,12 @@ fn merge_dir<T>(dst: Box<Node<T>>, mut root: Box<Node<T>>, src: Link<T>, dir: us
     }
 }
 
-fn merge<T>(mut left: Link<T>, mut right: Link<T>) -> Link<T> {
+fn merge<N: AVLArrayNode>(left: Link<N>, right: Link<N>) -> Link<N> {
     match left {
         Some(ln) => {
             match right {
                 Some(rn) => {
-                    if ln.height >= rn.height {
+                    if ln.height() >= rn.height() {
                         let (deep_left, src) = deepest_node(rn, 0);
                         Some(merge_dir(ln, deep_left, src, 1))
                     }
@@ -138,45 +85,149 @@ fn merge<T>(mut left: Link<T>, mut right: Link<T>) -> Link<T> {
     } 
 }
 
-fn at<T>(node: &Box<Node<T>>, i: usize) -> &T {
-    assert!(diff_node(node).abs() <= 1);
-    if size(&node.child[0]) == i {
-        &node.elem
+fn split<N: AVLArrayNode>(node: Box<N>, i: usize) -> (Link<N>, Link<N>) {
+    if i == node.size() { return (Some(node), None); }
+    let (node, left) = cut(node, 0);
+    let (node, right) = cut(node, 1);
+    if i < size(&left) {
+        let (sp_left, sp_right) = split(left.unwrap(), i);
+        let nright = match right {
+            Some(nright) => Some(merge_dir(nright, node, sp_right, 0)),
+            None => merge(sp_right, Some(node)),
+        };
+        (sp_left, nright)
     }
-    else if size(&node.child[0]) < i {
-        at(node.child[1].as_ref().unwrap(), i - size(&node.child[0]) - 1)
+    else if i == size(&left) {
+        (left, merge(Some(node), right))
     }
     else {
-        at(node.child[0].as_ref().unwrap(), i)
+        let (sp_left, sp_right) = split(right.unwrap(), i - size(&left) - 1);
+        let nleft = match left {
+            Some(nleft) => Some(merge_dir(nleft, node, sp_left, 1)),
+            None => merge(Some(node), sp_left),
+        };
+        (nleft, sp_right)
+    }
+}
+
+fn at<N: AVLArrayNode>(node: &Box<N>, i: usize) -> &N::Value {
+    if size(&node.child_imut(0)) == i {
+        node.val()
+    }
+    else if size(&node.child_imut(0)) < i {
+        at(node.child_imut(1).as_ref().unwrap(), i - size(&node.child_imut(0)) - 1) } else {
+        at(node.child_imut(0).as_ref().unwrap(), i)
+    }
+}
+
+fn at_set<N: AVLArrayNode>(node: &mut Box<N>, i: usize, val: N::Value) {
+    let sz = size(&node.child(0));
+    if sz == i {
+        *node.as_mut().val_mut() = val
+    }
+    else if sz < i {
+        at_set(node.child(1).as_mut().unwrap(), i - sz - 1, val); 
+    } else {
+        at_set(node.child(0).as_mut().unwrap(), i, val);
+    }
+    node.fix()
+}
+
+pub struct AVLTreeArray<N: AVLArrayNode> {
+    root: Link<N>,
+}
+
+impl<N: AVLArrayNode> AVLTreeArray<N> {
+    pub fn none() -> Self {
+        Self { root: None }
+    }
+    pub fn new(n: N) -> Self {
+        Self { root: Some(Box::new(n)) }
+    }
+    pub fn merge(self, right: Self) -> Self {
+        Self { root: merge(self.root, right.root) }
+    }
+    pub fn split(self, i: usize) -> (Self, Self) {
+        match self.root {
+            Some(rn) => {
+                let (l, r) = split(rn, i);
+                ( Self { root: l }, Self { root: r } )
+            }
+            None => ( Self { root: None }, Self { root: None } )
+        }
+    }
+    pub fn at(&self, i: usize) -> &N::Value {
+        assert!(i < size(&self.root), "at(): out of range");
+        at(self.root.as_ref().unwrap(), i)
+    }
+    pub fn at_set(&mut self, i: usize, val: N::Value) {
+        assert!(i < size(&self.root), "at_set(): out of range");
+        at_set(self.root.as_mut().unwrap(), i, val);
+    }
+}
+
+impl<N: AVLArrayNode + FoldNode> AVLTreeArray<N> where N::Value: Monoid {
+    pub fn fold(&self) -> N::Value {
+        match self.root {
+            Some(ref node) => node.fold().clone(),
+            None => <N::Value as Unital>::identity(),
+        }
     }
 }
 
 #[test]
+fn avlarray_test() {
+    use bbstree::nodes::ArrNode;
+    let arr = AVLTreeArray::none();
+    let arr = arr.merge(AVLTreeArray::new(ArrNode::new(0)));
+    let arr = arr.merge(AVLTreeArray::new(ArrNode::new(1)));
+    let arr = arr.merge(AVLTreeArray::new(ArrNode::new(2)));
+    let arr = arr.merge(AVLTreeArray::new(ArrNode::new(3)));
+    let arr = arr.merge(AVLTreeArray::new(ArrNode::new(4)));
+    let arr = arr.merge(AVLTreeArray::new(ArrNode::new(5)));
+    assert!(*arr.at(0) == 0);
+    assert!(*arr.at(1) == 1);
+    assert!(*arr.at(2) == 2);
+    assert!(*arr.at(3) == 3);
+    assert!(*arr.at(4) == 4);
+    assert!(*arr.at(5) == 5);
+}
 
-fn merge_node_test() {
-    let n0 = Box::new(Node::new(0));
-    let n1 = Box::new(Node::new(1));
-    let n2 = Box::new(Node::new(2));
-    let n3 = Box::new(Node::new(3));
-    let n4 = Box::new(Node::new(4));
-    let n5 = Box::new(Node::new(5));
-    let n0 = Some(n0);
+#[cfg(test)]
+mod avlrsq_test {
+    use algebra::*;
 
-    let n0 = merge(n0, Some(n1));
-    println!("root = {}", n0.as_ref().unwrap().elem);
-    let n0 = merge(n0, Some(n2));
-    println!("root = {}", n0.as_ref().unwrap().elem);
-    let n0 = merge(n0, Some(n3));
-    println!("root = {}", n0.as_ref().unwrap().elem);
-    let n0 = merge(n0, Some(n4));
-    println!("root = {}", n0.as_ref().unwrap().elem);
-    let n0 = merge(n0, Some(n5));
-    println!("root = {}", n0.as_ref().unwrap().elem);
-    println!("size = {}", n0.as_ref().unwrap().size);
-    assert!(at(n0.as_ref().unwrap(), 0) == &0);
-    assert!(at(n0.as_ref().unwrap(), 1) == &1);
-    assert!(at(n0.as_ref().unwrap(), 2) == &2);
-    assert!(at(n0.as_ref().unwrap(), 3) == &3);
-    assert!(at(n0.as_ref().unwrap(), 4) == &4);
-    assert!(at(n0.as_ref().unwrap(), 5) == &5);
+    #[derive(Clone)]
+    struct Am(usize);
+
+    impl Magma for Am {
+        fn op(&self, right: &Self) -> Self { Am(self.0 + right.0) }
+    }
+    impl Associative for Am {}
+
+    impl Unital for Am {
+        fn identity() -> Self { Am(0) }
+    }
+
+    #[test]
+    fn avlrsq_test()  {
+        use bbstree::avl_tree_array::AVLTreeArray;
+        use bbstree::nodes::ArrFoldNode;
+        let arr = AVLTreeArray::none();
+        let arr = arr.merge(AVLTreeArray::new(ArrFoldNode::new(Am(1))));
+        let arr = arr.merge(AVLTreeArray::new(ArrFoldNode::new(Am(2))));
+        let mut arr = arr.merge(AVLTreeArray::new(ArrFoldNode::new(Am(3))));
+        {
+            let (center, right) = arr.split(2);
+            let (left, center) = center.split(0);
+            assert!(center.fold().0 == Am(3).0);
+            arr = left.merge(center).merge(right);
+        }
+        {
+            let (center, right) = arr.split(2);
+            let (left, center) = center.split(1);
+            assert!(center.fold().0 == Am(2).0);
+            let _ = left.merge(center).merge(right);
+        }
+    }
 }
