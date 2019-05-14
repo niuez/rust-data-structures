@@ -1,9 +1,9 @@
 use bbstree::node_traits::*;
 use algebra::{ Monoid, Unital };
 
-pub trait AVLArrayNode: Node + ArrayNode + AVLNode {}
+pub trait AVLArrayNode: Node + NodeSize + NodeHeight {}
 
-impl<N: Node + ArrayNode + AVLNode> AVLArrayNode for N {}
+impl<N: Node + NodeSize + NodeHeight> AVLArrayNode for N {}
 
 fn rotate<N: AVLArrayNode>(x: Box<N>, dir: usize) -> Box<N> {
     let (x, y) = cut(x, 1 - dir);
@@ -110,7 +110,7 @@ fn split<N: AVLArrayNode>(node: Box<N>, i: usize) -> (Link<N>, Link<N>) {
     }
 }
 
-fn at<N: AVLArrayNode>(node: &Box<N>, i: usize) -> &N::Value {
+fn at<N: AVLArrayNode + NodeValue>(node: &Box<N>, i: usize) -> &N::ValType {
     if size(&node.child_imut(0)) == i {
         node.val()
     }
@@ -120,7 +120,7 @@ fn at<N: AVLArrayNode>(node: &Box<N>, i: usize) -> &N::Value {
     }
 }
 
-fn at_set<N: AVLArrayNode>(node: &mut Box<N>, i: usize, val: N::Value) {
+fn at_set<N: AVLArrayNode + NodeValue>(node: &mut Box<N>, i: usize, val: N::ValType) {
     let sz = size(&node.child(0));
     if sz == i {
         *node.as_mut().val_mut() = val
@@ -156,49 +156,36 @@ impl<N: AVLArrayNode> AVLTreeArray<N> {
             None => ( Self { root: None }, Self { root: None } )
         }
     }
-    pub fn at(&self, i: usize) -> &N::Value {
+}
+
+impl<N: AVLArrayNode + NodeValue> AVLTreeArray<N> {
+    pub fn at(&self, i: usize) -> &N::ValType {
         assert!(i < size(&self.root), "at(): out of range");
         at(self.root.as_ref().unwrap(), i)
     }
-    pub fn at_set(&mut self, i: usize, val: N::Value) {
+    pub fn at_set(&mut self, i: usize, val: N::ValType) {
         assert!(i < size(&self.root), "at_set(): out of range");
         at_set(self.root.as_mut().unwrap(), i, val);
     }
 }
 
-impl<N: AVLArrayNode + FoldNode> AVLTreeArray<N> where N::Value: Monoid {
-    pub fn fold(&self) -> N::Value {
+impl<N: AVLArrayNode + NodeFoldable> AVLTreeArray<N> where N::ValType: Monoid {
+    pub fn fold(&self) -> N::ValType {
         match self.root {
             Some(ref node) => node.fold().clone(),
-            None => <N::Value as Unital>::identity(),
+            None => <N::ValType as Unital>::identity(),
         }
     }
 }
 
-impl NodeSize for (Size, Height) {
-    fn size(&self) -> usize { self.0.size() }
-}
 
-impl NodeHeight for (Size, Height) {
-    fn height(&self) -> isize { self.1.height() }
-}
-
-#[test]
-fn avlarray_test() {
-    use bbstree::nodes::ArrNode;
-    use bbstree::node_traits::*;
-    let arr = AVLTreeArray::none();
-    let arr = arr.merge(AVLTreeArray::new(ArrNode::<(Size, Height), Element<usize>>::new(Element::new(0usize))));
-    let arr = arr.merge(AVLTreeArray::new(ArrNode::new(Element::new(1usize))));
-    let arr = arr.merge(AVLTreeArray::new(ArrNode::new(Element::new(2usize))));
-    assert!(*arr.at(0) == 0);
-    assert!(*arr.at(1) == 1);
-    assert!(*arr.at(2) == 2);
-}
 
 #[cfg(test)]
 mod avlrsq_test {
     use algebra::*;
+    use bbstree::node_traits::*;
+    use bbstree::nodes::ArrNode;
+    use std::cmp::max;
 
     #[derive(Clone)]
     struct Am(usize);
@@ -212,15 +199,55 @@ mod avlrsq_test {
         fn identity() -> Self { Am(0) }
     }
 
+    struct Qnode {
+        size: usize,
+        height: isize,
+        val: Am,
+        fold: Am,
+        child: [Link<Qnode>; 2]
+    }
+
+    impl Qnode {
+        fn new(val: Am) -> Self {
+            Qnode {
+                size: 1,
+                height: 1,
+                val: val,
+                fold: Am::identity(),
+                child: [None, None]
+            }
+        }
+    }
+
+    impl Fix for Qnode {
+        fn fix(&mut self) {
+            self.size = size(&self.child[0]) + size(&self.child[1]) + 1;
+            self.height = max(height(&self.child[0]), height(&self.child[1])) + 1;
+            self.fold = fold(&self.child[0])
+                       .op(&self.val)
+                       .op(&fold(&self.child[1]));
+        }
+    }
+    impl Node for Qnode {
+        fn child(&mut self, dir: usize) -> &mut Link<Self> { &mut self.child[dir] }
+        fn child_imut(&self, dir: usize) -> &Link<Self> { &self.child[dir] }
+    }
+    impl NodeSize for Qnode { fn size(&self) -> usize { self.size } }
+    impl NodeHeight for Qnode { fn height(&self) -> isize { self.height } }
+    impl NodeValue for Qnode {
+        type ValType = Am;
+        fn val(&self) -> &Am { &self.val }
+        fn val_mut(&mut self) -> &mut Am { &mut self.val }
+    }
+    impl NodeFoldable for Qnode { fn fold(&self) -> &Am { &self.fold } }
+
     #[test]
     fn avlrsq_test()  {
         use bbstree::avl_tree_array::AVLTreeArray;
-        use bbstree::nodes::ArrNode;
-        use bbstree::node_traits::*;
         let arr = AVLTreeArray::none();
-        let arr = arr.merge(AVLTreeArray::new(ArrNode::<(Size, Height), FoldElement<Am>>::new(FoldElement::new(Am(1)))));
-        let arr = arr.merge(AVLTreeArray::new(ArrNode::new(FoldElement::new(Am(2)))));
-        let mut arr = arr.merge(AVLTreeArray::new(ArrNode::new(FoldElement::new(Am(3)))));
+        let arr = arr.merge(AVLTreeArray::new(Qnode::new(Am(1))));
+        let arr = arr.merge(AVLTreeArray::new(Qnode::new(Am(2))));
+        let mut arr = arr.merge(AVLTreeArray::new(Qnode::new(Am(3))));
         {
             let (center, right) = arr.split(2);
             let (left, center) = center.split(0);

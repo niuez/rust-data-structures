@@ -1,28 +1,21 @@
 use bbstree::node_traits::*;
 use algebra::*;
 
-pub struct ArrNode<D: Data, V: Value> {
-    data: D,
-    val: V,
-    child: [Link<ArrNode<D, V>>; 2],
+pub struct ArrNode<D> {
+    pub data: D,
+    child: [Link<ArrNode<D>>; 2],
 } 
 
-impl<D: Data, V: Value> ArrNode<D, V> {
-    pub fn new(val: V) -> Self {
+impl<D> ArrNode<D> {
+    pub fn new(data: D) -> Self {
         Self {
-            data: D::new(),
-            val: val,
+            data: data,
             child: [ None, None ],
         }
     }
 }
 
-impl<D: Data, V: Value> Node for ArrNode<D, V> {
-    type Value = V::Type;
-    fn fix(&mut self) {
-        self.data.fix(self.child[0].as_ref().map(|c| &c.data), self.child[1].as_ref().map(|c| &c.data));
-        self.val.fix(self.child[0].as_ref().map(|c| &c.val), self.child[1].as_ref().map(|c| &c.val));
-    }
+impl<D> Node for ArrNode<D> where Self: Fix {
     fn child(&mut self, dir: usize) -> &mut Link<Self> { &mut self.child[dir] } 
     fn child_imut(&self, dir: usize) -> &Link<Self> { &self.child[dir] } 
     fn cut(&mut self, dir: usize) -> Link<Self> {
@@ -34,18 +27,22 @@ impl<D: Data, V: Value> Node for ArrNode<D, V> {
         self.child[dir] = dir_node;
         self.fix();
     }
-    fn val(&self) -> &Self::Value { self.val.val() }
-    fn val_mut(&mut self) -> &mut Self::Value { self.val.val_mut() }
 }
 
-impl<D: NodeSize, V: Value> ArrayNode for ArrNode<D, V> {
+impl<D: Value> NodeValue for ArrNode<D> where Self: Node {
+    type ValType = D::ValType;
+    fn val(&self) -> &Self::ValType { self.data.val() }
+    fn val_mut(&mut self) -> &mut Self::ValType { self.data.val_mut() }
+}
+
+impl<D: Size> NodeSize for ArrNode<D> where Self: Node {
     fn size(&self) -> usize { self.data.size() }
 }
 
-impl<D: NodeHeight, V: Value> AVLNode for ArrNode<D, V> {
+impl<D: Height> NodeHeight for ArrNode<D> where Self: Node {
     fn height(&self) -> isize { self.data.height() }
 }
 
-impl<D: Data, V: Foldable> FoldNode for ArrNode<D, V> where V::Type: Monoid {
-    fn fold(&self) -> &V::Type { self.val.fold() }
+impl<D: Foldable> NodeFoldable for ArrNode<D> where D::ValType: Monoid, Self: Node {
+    fn fold(&self) -> &D::ValType { self.data.fold() }
 }
