@@ -46,11 +46,11 @@ impl<T: Monoid> Node for ArrFoldNode<T> {
     fn val_mut(&mut self) -> &mut Self::Value { &mut self.val }
 }
 
-impl<T: Monoid> ArrayNode for ArrFoldNode<T> {
+impl<T: Monoid> SizeNode for ArrFoldNode<T> {
     fn size(&self) -> usize { self.size }
 }
 
-impl<T: Monoid> AVLNode for ArrFoldNode<T> {
+impl<T: Monoid> HeightNode for ArrFoldNode<T> {
     fn height(&self) -> isize { self.height }
 }
 

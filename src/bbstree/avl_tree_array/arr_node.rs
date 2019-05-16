@@ -40,10 +40,10 @@ impl<T> Node for ArrNode<T> {
     fn val_mut(&mut self) -> &mut Self::Value { &mut self.val }
 }
 
-impl<T> ArrayNode for ArrNode<T> {
+impl<T> SizeNode for ArrNode<T> {
     fn size(&self) -> usize { self.size }
 }
 
-impl<T> AVLNode for ArrNode<T> {
+impl<T> HeightNode for ArrNode<T> {
     fn height(&self) -> isize { self.height }
 }

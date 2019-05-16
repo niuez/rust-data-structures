@@ -1,18 +1,18 @@
 use bbstree::node_traits::*;
 use algebra::{ Monoid, Unital };
 
-pub trait AVLArrayNode: Node + ArrayNode + AVLNode {}
+pub trait AVLSizeNode: Node + SizeNode + HeightNode {}
 
-impl<N: Node + ArrayNode + AVLNode> AVLArrayNode for N {}
+impl<N: Node + SizeNode + HeightNode> AVLSizeNode for N {}
 
-fn rotate<N: AVLArrayNode>(x: Box<N>, dir: usize) -> Box<N> {
+fn rotate<N: AVLSizeNode>(x: Box<N>, dir: usize) -> Box<N> {
     let (x, y) = cut(x, 1 - dir);
     let (y, b) = cut(y.unwrap(), dir);
     let x = set(x, b, 1 - dir);
     set(y, Some(x), dir)
 }
 
-fn balance<N: AVLArrayNode>(mut node: Box<N>) -> Box<N> {
+fn balance<N: AVLSizeNode>(mut node: Box<N>) -> Box<N> {
     if node.diff() == 2 {
         if diff(node.child(0)) == -1 {
             let (n, ch) = cut(node, 0);
@@ -30,7 +30,7 @@ fn balance<N: AVLArrayNode>(mut node: Box<N>) -> Box<N> {
     else { node }
 }
 
-fn deepest_node<N: AVLArrayNode>(node: Box<N>, dir: usize) -> (Box<N>, Link<N>) {
+fn deepest_node<N: AVLSizeNode>(node: Box<N>, dir: usize) -> (Box<N>, Link<N>) {
     let (mut n, ch) = cut(node, dir);
     match ch {
         Some(dir_node) => {
@@ -44,7 +44,7 @@ fn deepest_node<N: AVLArrayNode>(node: Box<N>, dir: usize) -> (Box<N>, Link<N>) 
     }
 }
 
-fn merge_dir<N: AVLArrayNode>(dst: Box<N>, mut root: Box<N>, src: Link<N>, dir: usize) -> Box<N> {
+fn merge_dir<N: AVLSizeNode>(dst: Box<N>, mut root: Box<N>, src: Link<N>, dir: usize) -> Box<N> {
     if (dst.height() - height(&src)).abs() <= 1 {
         root = set(root, src, dir);
         root = set(root, Some(dst), 1 - dir);
@@ -64,7 +64,7 @@ fn merge_dir<N: AVLArrayNode>(dst: Box<N>, mut root: Box<N>, src: Link<N>, dir: 
     }
 }
 
-fn merge<N: AVLArrayNode>(left: Link<N>, right: Link<N>) -> Link<N> {
+fn merge<N: AVLSizeNode>(left: Link<N>, right: Link<N>) -> Link<N> {
     match left {
         Some(ln) => {
             match right {
@@ -85,7 +85,7 @@ fn merge<N: AVLArrayNode>(left: Link<N>, right: Link<N>) -> Link<N> {
     } 
 }
 
-fn split<N: AVLArrayNode>(node: Box<N>, i: usize) -> (Link<N>, Link<N>) {
+fn split<N: AVLSizeNode>(node: Box<N>, i: usize) -> (Link<N>, Link<N>) {
     if i == node.size() { return (Some(node), None); }
     let (node, left) = cut(node, 0);
     let (node, right) = cut(node, 1);
@@ -110,7 +110,7 @@ fn split<N: AVLArrayNode>(node: Box<N>, i: usize) -> (Link<N>, Link<N>) {
     }
 }
 
-fn at<N: AVLArrayNode>(node: &Box<N>, i: usize) -> &N::Value {
+fn at<N: AVLSizeNode>(node: &Box<N>, i: usize) -> &N::Value {
     if size(&node.child_imut(0)) == i {
         node.val()
     }
@@ -120,7 +120,7 @@ fn at<N: AVLArrayNode>(node: &Box<N>, i: usize) -> &N::Value {
     }
 }
 
-fn at_set<N: AVLArrayNode>(node: &mut Box<N>, i: usize, val: N::Value) {
+fn at_set<N: AVLSizeNode>(node: &mut Box<N>, i: usize, val: N::Value) {
     let sz = size(&node.child(0));
     if sz == i {
         *node.as_mut().val_mut() = val
@@ -133,11 +133,11 @@ fn at_set<N: AVLArrayNode>(node: &mut Box<N>, i: usize, val: N::Value) {
     node.fix()
 }
 
-pub struct AVLTreeArray<N: AVLArrayNode> {
+pub struct AVLTreeArray<N: AVLSizeNode> {
     root: Link<N>,
 }
 
-impl<N: AVLArrayNode> AVLTreeArray<N> {
+impl<N: AVLSizeNode> AVLTreeArray<N> {
     pub fn none() -> Self {
         Self { root: None }
     }
@@ -166,7 +166,7 @@ impl<N: AVLArrayNode> AVLTreeArray<N> {
     }
 }
 
-impl<N: AVLArrayNode + FoldNode> AVLTreeArray<N> where N::Value: Monoid {
+impl<N: AVLSizeNode + FoldNode> AVLTreeArray<N> where N::Value: Monoid {
     pub fn fold(&self) -> N::Value {
         match self.root {
             Some(ref node) => node.fold().clone(),
@@ -177,7 +177,7 @@ impl<N: AVLArrayNode + FoldNode> AVLTreeArray<N> where N::Value: Monoid {
 
 #[test]
 fn avlarray_test() {
-    use bbstree::nodes::ArrNode;
+    use bbstree::avl_tree_array::ArrNode;
     let arr = AVLTreeArray::none();
     let arr = arr.merge(AVLTreeArray::new(ArrNode::new(0)));
     let arr = arr.merge(AVLTreeArray::new(ArrNode::new(1)));
@@ -212,7 +212,7 @@ mod avlrsq_test {
     #[test]
     fn avlrsq_test()  {
         use bbstree::avl_tree_array::AVLTreeArray;
-        use bbstree::nodes::ArrFoldNode;
+        use bbstree::avl_tree_array::ArrFoldNode;
         let arr = AVLTreeArray::none();
         let arr = arr.merge(AVLTreeArray::new(ArrFoldNode::new(Am(1))));
         let arr = arr.merge(AVLTreeArray::new(ArrFoldNode::new(Am(2))));
