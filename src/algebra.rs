@@ -11,3 +11,8 @@ pub trait Unital: Magma {
 pub trait Monoid: Magma + Associative + Unital {}
 
 impl<T: Magma + Associative + Unital> Monoid for T {}
+
+pub trait Effector: Monoid {
+    type Target;
+    fn effect(&self, t: &Self::Target) -> Self::Target;
+}
