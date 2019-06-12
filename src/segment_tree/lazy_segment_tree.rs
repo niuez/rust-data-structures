@@ -17,8 +17,8 @@ impl<T: Monoid, E: Effector<Target=T>> LazySegmentTree<T, E> {
         Self { node: node, lazy: lazy, sz: sz }
     }
 
-    fn push(&mut self, i: usize) {
-        self.node[i] = self.lazy[i].effect(&self.node[i]);
+    fn push(&mut self, i: usize, sz: usize) {
+        self.node[i] = self.lazy[i].effect(&self.node[i], sz);
         if (i << 1) < self.node.len() {
             self.lazy[i << 1] = self.lazy[i << 1].op(&self.lazy[i]);
             self.lazy[(i << 1) + 1] = self.lazy[(i << 1) + 1].op(&self.lazy[i]);
@@ -27,11 +27,11 @@ impl<T: Monoid, E: Effector<Target=T>> LazySegmentTree<T, E> {
     }
 
     fn update_raw(&mut self, i: usize, a: usize, b: usize, l: usize, r: usize, e: &E) {
-        self.push(i);
+        self.push(i, r - l);
         if b <= l || r <= a { return; }
         else if a <= l && r <= b {
             self.lazy[i] = self.lazy[i].op(e);
-            self.push(i);
+            self.push(i, r - l);
         }
         else {
             self.update_raw(i << 1, a, b, l, (l + r) >> 1, e);
@@ -46,7 +46,7 @@ impl<T: Monoid, E: Effector<Target=T>> LazySegmentTree<T, E> {
     }
 
     fn fold_raw(&mut self, i: usize, a: usize, b: usize, l: usize, r: usize) -> T {
-        self.push(i);
+        self.push(i, r - l);
         if b <= l || r <= a { T::identity() }
         else if a <= l && r <= b { self.node[i].clone() }
         else {
@@ -93,7 +93,7 @@ mod rmq_ruq_test {
     }
     impl Effector for Uq {
         type Target = Mm;
-        fn effect(&self, t: &Self::Target) -> Self::Target {
+        fn effect(&self, t: &Self::Target, _: usize) -> Self::Target {
             match self.0 {
                 Some(u) => Mm(u),
                 None => t.clone(),

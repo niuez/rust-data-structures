@@ -34,7 +34,7 @@ impl<T: Monoid, E: Effector<Target=T>> Node<T, E> {
         if a <= l && r <= b {
             let eff = fold_eff.op(&new_eff);
             Node {
-                data: eff.effect(&self.data),
+                data: eff.effect(&self.data, r - l),
                 eff: self.eff.op(&eff),
                 left: self.left.clone(),
                 right: self.right.clone(),
@@ -42,7 +42,7 @@ impl<T: Monoid, E: Effector<Target=T>> Node<T, E> {
         }
         else if r <= a || b <= l {
             Node {
-                data: fold_eff.effect(&self.data),
+                data: fold_eff.effect(&self.data, r - l),
                 eff: self.eff.op(&fold_eff),
                 left: self.left.clone(),
                 right: self.right.clone(),
@@ -62,7 +62,7 @@ impl<T: Monoid, E: Effector<Target=T>> Node<T, E> {
     }
 
     fn fold(&self, a: usize, b: usize, l: usize, r: usize, eff: E) -> T {
-        if a <= l && r <= b { eff.effect(&self.data.clone()) }
+        if a <= l && r <= b { eff.effect(&self.data.clone(), r - l) }
         else if r <= a || b <= l { T::identity() }
         else {
             match self.left.as_ref() { Some(n) => n.fold(a, b, l, (l + r) >> 1, self.eff.op(&eff)), None => T::identity() }
@@ -132,7 +132,7 @@ mod persistent_lazy_segment_tree_test {
     }
     impl Effector for Uq {
         type Target = Mm;
-        fn effect(&self, t: &Self::Target) -> Self::Target {
+        fn effect(&self, t: &Self::Target, _: usize) -> Self::Target {
             match self.0 {
                 Some(u) => Mm(u),
                 None => t.clone(),
@@ -152,14 +152,14 @@ mod persistent_lazy_segment_tree_test {
 
 
     #[derive(Clone, Debug)]
-    struct Sm(usize, usize);
+    struct Sm(usize);
 
     impl Magma for Sm {
-        fn op(&self, right: &Self) -> Self { Sm(self.0 + right.0, self.1 + right.1) }
+        fn op(&self, right: &Self) -> Self { Sm(self.0 + right.0) }
     }
     impl Associative for Sm {}
     impl Unital for Sm {
-        fn identity() -> Self { Sm(0, 1) }
+        fn identity() -> Self { Sm(0) }
     }
 
     #[derive(Clone, Debug)]
@@ -176,8 +176,8 @@ mod persistent_lazy_segment_tree_test {
     }
     impl Effector for Aq {
         type Target = Sm;
-        fn effect(&self, t: &Self::Target) -> Self::Target {
-            Sm(t.0 + self.0 * t.1, t.1)
+        fn effect(&self, t: &Self::Target, s: usize) -> Self::Target {
+            Sm(t.0 + self.0 * s)
         }
     }
 
