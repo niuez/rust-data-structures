@@ -1,7 +1,7 @@
 use lctree::node_traits::*;
 use algebra::*;
 
-pub struct EffNode<T: Monoid, E: Effector<Target=T>> {
+pub struct EffNode<T: Monoid + Reversible, E: Effector<Target=T>> {
     ch: [Link<Self>; 2],
     par: Link<Self>,
     val: T,
@@ -11,7 +11,7 @@ pub struct EffNode<T: Monoid, E: Effector<Target=T>> {
     sz: usize,
 }
 
-impl<T: Monoid, E: Effector<Target=T>> Node for EffNode<T, E> {
+impl<T: Monoid + Reversible, E: Effector<Target=T>> Node for EffNode<T, E> {
     type Value = T;
     fn new(val: T) -> Self {
         EffNode {
@@ -46,6 +46,7 @@ impl<T: Monoid, E: Effector<Target=T>> Node for EffNode<T, E> {
     }
     fn reverse(&mut self) {
         self.ch.swap(0, 1);
+        self.fold = self.fold.reverse();
         self.rev ^= true;
     }
     fn child(&self, dir: usize) -> &Link<Self> {
@@ -79,7 +80,7 @@ impl<T: Monoid, E: Effector<Target=T>> Node for EffNode<T, E> {
     fn size(&self) -> usize { self.sz }
 }
 
-impl<T: Monoid, E: Effector<Target=T>> EffectNode for EffNode<T, E> {
+impl<T: Monoid + Reversible, E: Effector<Target=T>> EffectNode for EffNode<T, E> {
     type Effector = E;
     fn effect(&mut self, e: E) {
         self.val = e.effect(&self.val, 1);

@@ -92,6 +92,7 @@ mod lct_test {
     impl Unital for Sm {
         fn identity() -> Self { Sm(0) }
     }
+    impl Reversible for Sm {}
 
     #[derive(Clone, Debug)]
     struct Aq(usize);
