@@ -16,7 +16,3 @@ pub trait Effector: Monoid {
     type Target;
     fn effect(&self, t: &Self::Target, sz: usize) -> Self::Target;
 }
-
-pub trait Reversible: Monoid {
-    fn reverse(&self) -> Self { self.clone() }
-}

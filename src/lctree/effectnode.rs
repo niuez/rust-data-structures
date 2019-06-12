@@ -1,24 +1,26 @@
 use lctree::node_traits::*;
 use algebra::*;
 
-pub struct EffNode<T: Monoid + Reversible, E: Effector<Target=T>> {
+pub struct EffNode<T: Monoid, E: Effector<Target=T>> {
     ch: [Link<Self>; 2],
     par: Link<Self>,
     val: T,
     fold: T,
+    rev_fold: T,
     eff: E,
     rev: bool,
     sz: usize,
 }
 
-impl<T: Monoid + Reversible, E: Effector<Target=T>> Node for EffNode<T, E> {
+impl<T: Monoid, E: Effector<Target=T>> Node for EffNode<T, E> {
     type Value = T;
     fn new(val: T) -> Self {
         EffNode {
             ch: [ None, None ],
             par: None,
             val: val.clone(),
-            fold: val,
+            fold: val.clone(),
+            rev_fold: val,
             eff: E::identity(),
             rev: false,
             sz: 1
@@ -46,7 +48,7 @@ impl<T: Monoid + Reversible, E: Effector<Target=T>> Node for EffNode<T, E> {
     }
     fn reverse(&mut self) {
         self.ch.swap(0, 1);
-        self.fold = self.fold.reverse();
+        std::mem::swap(&mut self.fold, &mut self.rev_fold);
         self.rev ^= true;
     }
     fn child(&self, dir: usize) -> &Link<Self> {
@@ -64,14 +66,17 @@ impl<T: Monoid + Reversible, E: Effector<Target=T>> Node for EffNode<T, E> {
     fn fix(&mut self) {
         self.sz = 1;
         self.fold = self.val.clone();
+        self.rev_fold = self.val.clone();
         unsafe { 
             if let Some(left) = self.ch[0] {
                 self.sz += left.as_ref().sz;
                 self.fold = left.as_ref().fold().op(&self.fold);
+                self.rev_fold = self.fold.op(&left.as_ref().rev_fold);
             }
             if let Some(right) = self.ch[1] {
                 self.sz += right.as_ref().sz;
                 self.fold = self.fold.op(right.as_ref().fold());
+                self.rev_fold = right.as_ref().rev_fold.op(&self.rev_fold);
             }
         }
     }
@@ -80,7 +85,7 @@ impl<T: Monoid + Reversible, E: Effector<Target=T>> Node for EffNode<T, E> {
     fn size(&self) -> usize { self.sz }
 }
 
-impl<T: Monoid + Reversible, E: Effector<Target=T>> EffectNode for EffNode<T, E> {
+impl<T: Monoid, E: Effector<Target=T>> EffectNode for EffNode<T, E> {
     type Effector = E;
     fn effect(&mut self, e: E) {
         self.val = e.effect(&self.val, 1);
