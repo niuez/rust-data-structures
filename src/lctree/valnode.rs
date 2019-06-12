@@ -1,6 +1,6 @@
 use lctree::node_traits::*;
 
-struct ValNode<T> {
+pub struct ValNode<T> {
     ch: [Link<Self>; 2],
     par: Link<Self>,
     val: T,
